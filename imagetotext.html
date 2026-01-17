@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OCR Đa Ngôn Ngữ - K4 Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+      .loading-bar {
+        transition: width 0.3s ease;
+      }
+      .drag-active {
+        border-color: #4f46e5 !important;
+        background-color: #eef2ff !important;
+      }
+      /* Font hiển thị kết quả: Segoe UI cho dễ đọc */
+      textarea {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+      /* Nút xóa ảnh */
+      .remove-btn {
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .img-container:hover .remove-btn {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 min-h-screen font-sans py-8">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-extrabold text-indigo-900">
+          🌐 Công cụ OCR Đa Ngôn Ngữ
+        </h1>
+        <p class="text-slate-500 mt-2">
+          Pháp • Việt • Anh | Hỗ trợ xử lý hàng loạt
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-5 flex flex-col gap-4">
+          <div
+            class="bg-white p-5 rounded-xl shadow-lg border border-slate-200 flex flex-col h-full"
+          >
+            <div class="flex justify-between items-center mb-3">
+              <h2 class="font-bold text-lg text-slate-700">
+                1. Ảnh đầu vào (<span id="count-img">0</span>)
+              </h2>
+              <div class="flex gap-2">
+                <button
+                  onclick="clearAllImages()"
+                  class="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 bg-red-50 rounded"
+                >
+                  Xóa hết
+                </button>
+                <label
+                  for="file-input"
+                  class="cursor-pointer text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded font-bold hover:bg-indigo-200 transition"
+                >
+                  + Thêm ảnh
+                </label>
+              </div>
+            </div>
+
+            <div
+              class="border-2 border-dashed border-slate-300 rounded-lg flex-grow relative bg-slate-50 transition-colors min-h-[250px] overflow-y-auto"
+              id="drop-zone"
+            >
+              <input
+                type="file"
+                id="file-input"
+                accept="image/*"
+                multiple
+                class="hidden"
+              />
+
+              <div
+                id="upload-placeholder"
+                class="absolute inset-0 flex flex-col justify-center items-center pointer-events-none"
+              >
+                <div class="text-4xl mb-3">📂</div>
+                <p class="text-slate-600 font-medium text-center px-4">
+                  Kéo thả ảnh hoặc Paste (Ctrl+V)
+                </p>
+              </div>
+
+              <div
+                id="preview-list"
+                class="grid grid-cols-2 gap-2 p-2 w-full"
+              ></div>
+            </div>
+
+            <div
+              class="mt-4 p-4 bg-indigo-50 rounded-xl border border-indigo-100"
+            >
+              <div class="mb-4">
+                <label
+                  class="block text-xs font-bold text-indigo-900 mb-1 uppercase"
+                  >Ngôn ngữ văn bản gốc:</label
+                >
+                <select
+                  id="language-select"
+                  class="w-full p-2.5 border border-indigo-200 rounded-lg bg-white text-slate-700 font-medium focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                >
+                  <option value="fra" selected>🇫🇷 Tiếng Pháp (French)</option>
+                  <option value="vie">🇻🇳 Tiếng Việt (Vietnamese)</option>
+                  <option value="eng">🇬🇧 Tiếng Anh (English)</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  class="block text-xs font-bold text-indigo-900 mb-1 uppercase"
+                  >Định dạng đầu ra:</label
+                >
+                <div
+                  class="flex gap-4 bg-white p-2 rounded-lg border border-indigo-200"
+                >
+                  <label class="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="mode"
+                      value="paragraph"
+                      checked
+                      class="w-4 h-4 text-indigo-600"
+                    />
+                    <span class="ml-2 text-sm text-slate-700"
+                      >Đoạn văn (Tự nối)</span
+                    >
+                  </label>
+                  <label class="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="mode"
+                      value="raw"
+                      class="w-4 h-4 text-indigo-600"
+                    />
+                    <span class="ml-2 text-sm text-slate-700"
+                      >Giữ nguyên dòng</span
+                    >
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <button
+              id="btn-convert"
+              class="w-full mt-4 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              🚀 Bắt đầu chuyển đổi
+            </button>
+
+            <div id="progress-container" class="mt-4 hidden">
+              <div
+                class="flex justify-between text-xs font-semibold text-slate-600 mb-1"
+              >
+                <span id="status-text">Đang khởi động...</span>
+                <span id="percent-text">0%</span>
+              </div>
+              <div class="w-full bg-slate-200 rounded-full h-2">
+                <div
+                  id="progress-bar"
+                  class="bg-indigo-600 h-2 rounded-full loading-bar"
+                  style="width: 0%"
+                ></div>
+              </div>
+              <p
+                id="batch-status"
+                class="text-xs text-center mt-2 text-indigo-600 font-bold"
+              ></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-7">
+          <div
+            class="bg-white p-5 rounded-xl shadow-lg border border-slate-200 flex flex-col h-[600px] lg:h-full"
+          >
+            <div class="flex justify-between items-center mb-3">
+              <h2 class="font-bold text-lg text-green-700">
+                2. Kết quả văn bản
+              </h2>
+              <button
+                onclick="copyText()"
+                class="text-xs font-bold bg-green-100 hover:bg-green-200 text-green-800 py-2 px-3 rounded transition flex items-center gap-1"
+              >
+                📋 Copy Toàn Bộ
+              </button>
+            </div>
+
+            <textarea
+              id="result-text"
+              class="w-full flex-grow p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-base text-slate-800 bg-slate-50"
+              placeholder="Văn bản sau khi nhận diện sẽ xuất hiện tại đây..."
+            ></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // DOM Elements
+      const fileInput = document.getElementById("file-input");
+      const previewList = document.getElementById("preview-list");
+      const uploadPlaceholder = document.getElementById("upload-placeholder");
+      const dropZone = document.getElementById("drop-zone");
+      const btnConvert = document.getElementById("btn-convert");
+      const countImg = document.getElementById("count-img");
+      const resultText = document.getElementById("result-text");
+      const languageSelect = document.getElementById("language-select");
+
+      // Progress UI
+      const progressBar = document.getElementById("progress-bar");
+      const progressContainer = document.getElementById("progress-container");
+      const statusText = document.getElementById("status-text");
+      const percentText = document.getElementById("percent-text");
+      const batchStatus = document.getElementById("batch-status");
+
+      let imageQueue = [];
+
+      // --- QUẢN LÝ GIAO DIỆN ---
+      function updateUI() {
+        previewList.innerHTML = "";
+        countImg.innerText = imageQueue.length;
+
+        if (imageQueue.length === 0) {
+          uploadPlaceholder.classList.remove("hidden");
+          btnConvert.disabled = true;
+          dropZone.classList.remove("bg-indigo-50");
+        } else {
+          uploadPlaceholder.classList.add("hidden");
+          btnConvert.disabled = false;
+          dropZone.classList.add("bg-indigo-50");
+
+          imageQueue.forEach((file, index) => {
+            const div = document.createElement("div");
+            div.className =
+              "img-container relative border border-slate-300 rounded overflow-hidden h-28 group bg-white shadow-sm";
+
+            const img = document.createElement("img");
+            img.src = URL.createObjectURL(file);
+            img.className = "w-full h-full object-cover";
+
+            const btnRemove = document.createElement("button");
+            btnRemove.innerHTML = "×";
+            btnRemove.className =
+              "remove-btn absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 shadow-md cursor-pointer";
+            btnRemove.onclick = (e) => {
+              e.stopPropagation();
+              removeImage(index);
+            };
+
+            const badge = document.createElement("span");
+            badge.innerText = `#${index + 1}`;
+            badge.className =
+              "absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 rounded backdrop-blur-sm";
+
+            div.appendChild(img);
+            div.appendChild(btnRemove);
+            div.appendChild(badge);
+            previewList.appendChild(div);
+          });
+        }
+      }
+
+      function addFiles(files) {
+        if (!files || files.length === 0) return;
+        let added = false;
+        for (let file of files) {
+          if (file.type.startsWith("image/")) {
+            imageQueue.push(file);
+            added = true;
+          }
+        }
+        if (added) updateUI();
+      }
+
+      function removeImage(index) {
+        imageQueue.splice(index, 1);
+        updateUI();
+      }
+
+      function clearAllImages() {
+        imageQueue = [];
+        updateUI();
+        resultText.value = "";
+      }
+
+      // --- EVENTS ---
+      fileInput.addEventListener("change", (e) => {
+        addFiles(e.target.files);
+        fileInput.value = "";
+      });
+
+      document.addEventListener("paste", (e) => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        const files = [];
+        for (let item of items) {
+          if (item.kind === "file" && item.type.includes("image/"))
+            files.push(item.getAsFile());
+        }
+        addFiles(files);
+      });
+
+      // Drag & Drop
+      dropZone.addEventListener("dragenter", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("drag-active");
+      });
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("drag-active");
+      });
+      dropZone.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("drag-active");
+      });
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("drag-active");
+        addFiles(e.dataTransfer.files);
+      });
+      dropZone.addEventListener("click", (e) => {
+        if (e.target === dropZone || e.target.closest("#upload-placeholder"))
+          fileInput.click();
+      });
+
+      // --- HÀM XỬ LÝ VĂN BẢN ---
+      function cleanUpText(text) {
+        // 1. Nối từ bị ngắt bởi dấu gạch ngang cuối dòng
+        let cleaned = text.replace(/-\n/g, "");
+        // 2. Tách đoạn văn (dựa trên 2 dấu xuống dòng trở lên)
+        let paragraphs = cleaned.split(/\n\s*\n/);
+        // 3. Xóa xuống dòng đơn lẻ trong từng đoạn
+        let processedParagraphs = paragraphs.map((p) =>
+          p.replace(/\n/g, " ").replace(/\s+/g, " ").trim(),
+        );
+        return processedParagraphs.join("\n\n");
+      }
+
+      // --- XỬ LÝ OCR CHÍNH ---
+      btnConvert.addEventListener("click", async () => {
+        if (imageQueue.length === 0) return;
+
+        // 1. Lấy thông số từ người dùng
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        const selectedLang = languageSelect.value; // 'fra', 'vie', 'eng'
+        const langName =
+          languageSelect.options[languageSelect.selectedIndex].text;
+
+        // Reset UI
+        progressContainer.classList.remove("hidden");
+        btnConvert.disabled = true;
+        resultText.value = "";
+
+        const totalImages = imageQueue.length;
+        let fullText = [];
+
+        try {
+          statusText.innerText = `Đang tải dữ liệu ${langName}...`;
+
+          // 2. Khởi tạo Worker với ngôn ngữ đã chọn
+          const worker = await Tesseract.createWorker(selectedLang, 1, {
+            logger: (m) => {
+              if (m.status === "recognizing text") {
+                const p = Math.round(m.progress * 100);
+                progressBar.style.width = p + "%";
+                percentText.innerText = p + "%";
+              }
+            },
+          });
+
+          // Cài đặt PSM 6 (Single Block) để đọc chính xác
+          await worker.setParameters({
+            tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+          });
+
+          // 3. Vòng lặp xử lý từng ảnh
+          for (let i = 0; i < totalImages; i++) {
+            const currentFile = imageQueue[i];
+
+            batchStatus.innerText = `Đang xử lý ảnh ${i + 1} / ${totalImages}`;
+            statusText.innerText = `Đang đọc ảnh số ${i + 1}...`;
+            progressBar.style.width = "0%";
+
+            const {
+              data: { text },
+            } = await worker.recognize(currentFile);
+
+            // Xử lý hậu kỳ
+            let processedText = text;
+            if (mode === "paragraph") {
+              processedText = cleanUpText(text);
+            }
+
+            // Format kết quả
+            if (totalImages > 1) fullText.push(`--- [Trang ${i + 1}] ---`);
+            fullText.push(processedText);
+            fullText.push("\n");
+
+            // Hiển thị realtime
+            resultText.value = fullText.join("\n");
+            resultText.scrollTop = resultText.scrollHeight;
+          }
+
+          statusText.innerText = "✅ Đã xong!";
+          batchStatus.innerText = `Hoàn tất ${totalImages} trang.`;
+          progressBar.style.width = "100%";
+
+          await worker.terminate();
+        } catch (error) {
+          console.error(error);
+          statusText.innerText = "Lỗi!";
+          alert("Lỗi: " + error.message);
+        } finally {
+          btnConvert.disabled = false;
+          btnConvert.innerText = "🚀 Bắt đầu chuyển đổi";
+        }
+      });
+
+      function copyText() {
+        if (!resultText.value) return;
+        resultText.select();
+        document.execCommand("copy");
+        alert("Đã copy văn bản vào bộ nhớ tạm!");
+      }
+    </script>
+  </body>
+</html>
